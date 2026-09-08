@@ -1,4 +1,3 @@
-# dangerous_deva_adventure
 
 # Dangerous Deva Adventure Game
 

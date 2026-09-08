@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dangerous Deva</title>
+<style>
+  :root{
+    --bg-deep:#0d1321;
+    --bg-mid:#1d2b4f;
+    --brick:#8a4b3b;
+    --brick-dark:#5c2e22;
+    --gold:#f2c14e;
+    --gold-dark:#b8862f;
+    --mint:#5fd0a5;
+    --ruby:#e5533d;
+    --paper:#f4ead3;
+    --ink:#1a1420;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    background:var(--bg-deep);
+    font-family:'Trebuchet MS','Segoe UI',sans-serif;
+    color:var(--paper);
+    overflow:hidden;
+  }
+  #wrap{
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    max-width:none;
+    overflow:hidden;
+  }
+  #gameCanvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+    background:linear-gradient(#1d2b4f,#0d1321);
+    border:0;
+    border-radius:0;
+    image-rendering:auto;
+  }
+  .hud{
+    position:absolute; top:18px; left:22px; right:22px;
+    display:flex; justify-content:space-between;
+    font-size:15px; letter-spacing:0.5px;
+    text-shadow:2px 2px 0 #000;
+    pointer-events:none;
+  }
+  .hud span.label{color:var(--gold);}
+  .overlay{
+    position:absolute; inset:0;
+    background:rgba(10,8,20,0.92);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:24px;
+    border-radius:4px;
+  }
+  .hidden{display:none !important;}
+  h1{
+    font-size:38px; margin:0 0 6px; color:var(--gold);
+    text-shadow:3px 3px 0 var(--brick-dark);
+    letter-spacing:1px;
+  }
+  h2{ margin:4px 0 16px; color:var(--mint); font-size:18px; font-weight:normal;}
+  .btn{
+    background:var(--brick); color:var(--paper); border:3px solid var(--brick-dark);
+    padding:10px 22px; margin:6px; font-size:16px; border-radius:5px; cursor:pointer;
+    font-family:inherit;
+  }
+  .btn:hover{ background:var(--ruby); }
+  .btn.primary{ background:var(--mint); color:var(--ink); border-color:#2f7a5c;}
+  .btn.primary:hover{ background:#7fe6bd; }
+  .charRow{ display:flex; gap:16px; margin:12px 0 18px; }
+  .charCard{
+    width:90px; padding:10px 6px; border:3px solid var(--brick-dark);
+    border-radius:6px; cursor:pointer; background:#241933;
+  }
+  .charCard.selected{ border-color:var(--gold); background:#3a2650; }
+  .charCard .swatch{ width:36px;height:48px;margin:0 auto 8px; border-radius:4px;}
+  .tutorialGrid{
+    text-align:left; max-width:460px; font-size:14px; line-height:1.6;
+    background:#241933; border:2px solid var(--brick-dark); border-radius:6px;
+    padding:14px 18px; margin-bottom:14px;
+  }
+  .tutorialGrid b{ color:var(--gold); }
+  small.note{ opacity:0.7; font-size:12px; margin-top:8px; display:block;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <div class="hud">
+    <span><span class="label">Level</span> <span id="hudLevel">1</span>/<span id="hudTotal">4</span></span>
+    <span><span class="label">Score</span> <span id="hudScore">0</span></span>
+    <span><span class="label">Lives</span> <span id="hudLives">3</span></span>
+  </div>
+
+  <!-- START / CHARACTER SELECT -->
+  <div id="startScreen" class="overlay">
+    <h1>DANGEROUS DEVA ADVENTURE</h1>
+    <h2>fixed edition — pick your Deva</h2>
+    <div class="charRow" id="charRow"></div>
+    <div>
+      <button class="btn primary" id="btnNewGame">New Game</button>
+      <button class="btn" id="btnContinue">Continue</button>
+      <button class="btn" id="btnTutorial">How to Play</button>
+    </div>
+    <small class="note" id="saveNote"></small>
+  </div>
+
+  <!-- TUTORIAL -->
+  <div id="tutorialScreen" class="overlay hidden">
+    <h1 style="font-size:26px;">How to Play</h1>
+    <div class="tutorialGrid">
+      <b>Move:</b> Arrow Left/Right or A/D<br>
+      <b>Jump:</b> Space, Up Arrow, or W — full air control, you can steer left/right mid‑air<br>
+      <b>Goal:</b> reach the glowing flag on each level<br>
+      <b>Coins</b> add score. <b>Stars</b> are bonus rewards worth more.<br>
+      <b>Spikes</b> cost a life and send you back to the start of the current level only — never all the way to level 1.<br>
+      Progress <b>auto‑saves</b> after every completed level, so you can quit and continue later.<br>
+      You can move freely left and right — backtracking is always allowed.
+    </div>
+    <button class="btn primary" id="btnCloseTutorial">Got it</button>
+  </div>
+
+  <!-- LEVEL COMPLETE -->
+  <div id="levelCompleteScreen" class="overlay hidden">
+    <h1 style="font-size:28px;">Level Clear!</h1>
+    <h2 id="lcSummary"></h2>
+    <button class="btn primary" id="btnNextLevel">Next Level</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div id="gameOverScreen" class="overlay hidden">
+    <h1 style="font-size:28px; color:var(--ruby);">Out of Lives</h1>
+    <h2 id="goSummary"></h2>
+    <button class="btn primary" id="btnRetryLevel">Retry This Level</button>
+    <button class="btn" id="btnBackToMenu">Main Menu</button>
+    <small class="note">Progress from your last cleared level is safely saved — you only redo this level.</small>
+  </div>
+
+  <!-- WIN -->
+  <div id="winScreen" class="overlay hidden">
+    <h1 style="font-size:30px;">All Levels Cleared!</h1>
+    <h2 id="winSummary"></h2>
+    <button class="btn primary" id="btnPlayAgain">Play Again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---------- Audio (simple synthesized SFX, no external assets) ----------
+let actx = null;
+function ensureAudio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function tone(freq, dur, type, vol, delay){
+  if(!actx) return;
+  const t0 = actx.currentTime + (delay||0);
+  const osc = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.type = type||'square';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime((vol!==undefined?vol:0.18), t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+  osc.connect(gain); gain.connect(actx.destination);
+  osc.start(t0); osc.stop(t0+dur);
+}
+const sfx = {
+  jump: ()=>tone(520,0.12,'square',0.15),
+  coin: ()=>{ tone(880,0.08,'square',0.15); tone(1320,0.09,'square',0.12,0.06); },
+  bonus: ()=>{ tone(660,0.1,'triangle',0.18); tone(990,0.1,'triangle',0.16,0.08); tone(1320,0.12,'triangle',0.14,0.16); },
+  hurt: ()=>tone(140,0.25,'sawtooth',0.2),
+  levelClear: ()=>{ [523,659,784,1047].forEach((f,i)=>tone(f,0.16,'square',0.15,i*0.1)); },
+  gameOver: ()=>{ [330,277,220,165].forEach((f,i)=>tone(f,0.2,'sawtooth',0.18,i*0.12)); }
+};
+
+// ---------- Canvas ----------
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ---------- Characters (cosmetic choice, fixes "no change in character") ----------
+// Each Deva is a small elemental spirit with its own silhouette, accent color and trailing FX.
+const CHARACTERS = [
+  {id:'red',  name:'Ember',  tagline:'fire spirit',   body:'#e5533d', trim:'#7a241a', accent:'#ffce6b', accessory:'flame'},
+  {id:'mint', name:'Thorn',  tagline:'forest spirit', body:'#5fd0a5', trim:'#1f6d4d', accent:'#c9f27a', accessory:'leaf'},
+  {id:'gold', name:'Aurum',  tagline:'star spirit',   body:'#f2c14e', trim:'#8a611b', accent:'#fff3c4', accessory:'crown'}
+];
+let selectedChar = CHARACTERS[0];
+
+// ---------- Level data ----------
+// x,y,w,h in world pixels. ground = 360.
+const GROUND_Y = 360;
+function lvl(width, platforms, coins, bonus, spikes, goal, start){
+  return {width, platforms, coins, bonus, spikes, goal, start};
+}
+const LEVELS = [
+  lvl(1000,
+    [ {x:0,y:GROUND_Y,w:1000,h:40},
+      {x:220,y:280,w:110,h:16},
+      {x:400,y:220,w:110,h:16},
+      {x:600,y:280,w:120,h:16},
+      {x:800,y:200,w:120,h:16} ],
+    [ {x:250,y:250},{x:430,y:190},{x:640,y:250},{x:840,y:170},{x:120,y:330} ],
+    [ {x:900,y:150} ],
+    [ {x:520,y:344,w:40,h:16} ],
+    {x:940,y:296,w:36,h:64},
+    {x:40,y:296}
+  ),
+  lvl(1300,
+    [ {x:0,y:GROUND_Y,w:300,h:40},
+      {x:380,y:GROUND_Y,w:200,h:40},
+      {x:660,y:GROUND_Y,w:180,h:40},
+      {x:920,y:GROUND_Y,w:380,h:40},
+      {x:180,y:260,w:100,h:16},
+      {x:420,y:200,w:100,h:16},
+      {x:660,y:250,w:100,h:16},
+      {x:980,y:230,w:120,h:16},
+      {x:1150,y:170,w:110,h:16} ],
+    [ {x:210,y:230},{x:450,y:170},{x:690,y:220},{x:1010,y:200},{x:60,y:330},{x:1180,y:140} ],
+    [ {x:150,y:220},{x:1220,y:120} ],
+    [ {x:320,y:344,w:50,h:16},{x:590,y:344,w:60,h:16},{x:850,y:344,w:60,h:16} ],
+    {x:1250,y:296,w:36,h:64},
+    {x:40,y:296}
+  ),
+  lvl(1500,
+    [ {x:0,y:GROUND_Y,w:220,h:40},
+      {x:300,y:GROUND_Y,w:160,h:40},
+      {x:560,y:GROUND_Y,w:160,h:40},
+      {x:820,y:GROUND_Y,w:160,h:40},
+      {x:1080,y:GROUND_Y,w:420,h:40},
+      {x:120,y:250,w:90,h:16},
+      {x:340,y:190,w:90,h:16},
+      {x:560,y:150,w:90,h:16},
+      {x:800,y:210,w:90,h:16},
+      {x:1000,y:260,w:90,h:16},
+      {x:1200,y:190,w:90,h:16},
+      {x:1350,y:130,w:100,h:16} ],
+    [ {x:150,y:220},{x:370,y:160},{x:590,y:120},{x:830,y:180},{x:1030,y:230},{x:1230,y:160},{x:1380,y:100},{x:40,y:330} ],
+    [ {x:600,y:100},{x:1420,y:80} ],
+    [ {x:250,y:344,w:40,h:16},{x:510,y:344,w:40,h:16},{x:770,y:344,w:40,h:16},{x:1030,y:344,w:40,h:16} ],
+    {x:1460,y:296,w:36,h:64},
+    {x:30,y:296}
+  ),
+  lvl(1700,
+    [ {x:0,y:GROUND_Y,w:180,h:40},
+      {x:260,y:GROUND_Y,w:120,h:40},
+      {x:460,y:GROUND_Y,w:120,h:40},
+      {x:660,y:GROUND_Y,w:120,h:40},
+      {x:860,y:GROUND_Y,w:120,h:40},
+      {x:1060,y:GROUND_Y,w:120,h:40},
+      {x:1260,y:GROUND_Y,w:440,h:40},
+      {x:100,y:260,w:80,h:16},
+      {x:300,y:200,w:80,h:16},
+      {x:500,y:150,w:80,h:16},
+      {x:700,y:200,w:80,h:16},
+      {x:900,y:250,w:80,h:16},
+      {x:1100,y:180,w:80,h:16},
+      {x:1300,y:120,w:90,h:16},
+      {x:1480,y:180,w:90,h:16},
+      {x:1620,y:130,w:90,h:16} ],
+    [ {x:130,y:230},{x:330,y:170},{x:530,y:120},{x:730,y:170},{x:930,y:220},{x:1130,y:150},{x:1330,y:90},{x:1510,y:150},{x:1650,y:100} ],
+    [ {x:700,y:90},{x:1690,y:60} ],
+    [ {x:210,y:344,w:36,h:16},{x:410,y:344,w:36,h:16},{x:610,y:344,w:36,h:16},{x:810,y:344,w:36,h:16},{x:1010,y:344,w:36,h:16},{x:1210,y:344,w:36,h:16} ],
+    {x:1660,y:296,w:36,h:64},
+    {x:30,y:296}
+  ),
+  lvl(1850,
+    [ {x:0,y:GROUND_Y,w:160,h:40},
+      {x:240,y:GROUND_Y,w:100,h:40},
+      {x:420,y:GROUND_Y,w:100,h:40},
+      {x:600,y:GROUND_Y,w:100,h:40},
+      {x:780,y:GROUND_Y,w:100,h:40},
+      {x:960,y:GROUND_Y,w:100,h:40},
+      {x:1140,y:GROUND_Y,w:100,h:40},
+      {x:1320,y:GROUND_Y,w:530,h:40},
+      {x:90,y:270,w:80,h:16},
+      {x:280,y:210,w:80,h:16},
+      {x:470,y:160,w:80,h:16},
+      {x:660,y:210,w:80,h:16},
+      {x:850,y:260,w:80,h:16},
+      {x:1030,y:190,w:80,h:16},
+      {x:1210,y:130,w:80,h:16},
+      {x:1400,y:110,w:90,h:16},
+      {x:1580,y:170,w:90,h:16},
+      {x:1740,y:120,w:90,h:16} ],
+    [ {x:120,y:240},{x:310,y:180},{x:500,y:130},{x:690,y:180},{x:880,y:230},{x:1060,y:160},{x:1240,y:100},{x:1430,y:80},{x:1610,y:140},{x:1770,y:90} ],
+    [ {x:660,y:80},{x:1820,y:60} ],
+    [ {x:190,y:344,w:30,h:16},{x:370,y:344,w:30,h:16},{x:550,y:344,w:30,h:16},{x:730,y:344,w:30,h:16},{x:910,y:344,w:30,h:16},{x:1090,y:344,w:30,h:16},{x:1270,y:344,w:30,h:16} ],
+    {x:1800,y:296,w:36,h:64},
+    {x:30,y:296}
+  ),
+  lvl(2000,
+    [ {x:0,y:GROUND_Y,w:140,h:40},
+      {x:220,y:320,w:90,h:16},
+      {x:400,y:280,w:90,h:16},
+      {x:580,y:240,w:90,h:16},
+      {x:760,y:200,w:90,h:16},
+      {x:940,y:240,w:90,h:16},
+      {x:1120,y:280,w:90,h:16},
+      {x:1300,y:220,w:90,h:16},
+      {x:1480,y:160,w:90,h:16},
+      {x:1660,y:200,w:90,h:16},
+      {x:1840,y:GROUND_Y,w:160,h:40} ],
+    [ {x:250,y:290},{x:430,y:250},{x:610,y:210},{x:790,y:170},{x:970,y:210},{x:1150,y:250},{x:1330,y:190},{x:1510,y:130},{x:1690,y:170},{x:60,y:330} ],
+    [ {x:790,y:130},{x:1930,y:60} ],
+    [],
+    {x:1910,y:296,w:36,h:64},
+    {x:30,y:296}
+  ),
+  lvl(2100,
+    [ {x:0,y:GROUND_Y,w:180,h:40},
+      {x:300,y:GROUND_Y,w:110,h:40},
+      {x:150,y:250,w:70,h:16},
+      {x:480,y:GROUND_Y,w:110,h:40},
+      {x:340,y:220,w:70,h:16},
+      {x:660,y:GROUND_Y,w:110,h:40},
+      {x:520,y:180,w:70,h:16},
+      {x:840,y:GROUND_Y,w:110,h:40},
+      {x:700,y:150,w:70,h:16},
+      {x:1020,y:GROUND_Y,w:110,h:40},
+      {x:880,y:130,w:70,h:16},
+      {x:1060,y:110,w:200,h:16},
+      {x:1350,y:170,w:100,h:16},
+      {x:1550,y:220,w:100,h:16},
+      {x:1750,y:GROUND_Y,w:350,h:40} ],
+    [ {x:180,y:220},{x:370,y:190},{x:550,y:150},{x:730,y:120},{x:910,y:100},{x:1150,y:80},{x:1380,y:140},{x:1580,y:190},{x:60,y:330} ],
+    [ {x:1160,y:60},{x:1960,y:60} ],
+    [ {x:220,y:344,w:60,h:16},{x:400,y:344,w:60,h:16},{x:580,y:344,w:60,h:16},{x:760,y:344,w:60,h:16},{x:940,y:344,w:60,h:16} ],
+    {x:2040,y:296,w:36,h:64},
+    {x:30,y:296}
+  ),
+  lvl(2250,
+    [ {x:0,y:GROUND_Y,w:120,h:40},
+      {x:200,y:300,w:80,h:16},
+      {x:360,y:260,w:80,h:16},
+      {x:520,y:220,w:80,h:16},
+      {x:680,y:180,w:80,h:16},
+      {x:840,y:140,w:80,h:16},
+      {x:1000,y:180,w:80,h:16},
+      {x:1160,y:220,w:80,h:16},
+      {x:1320,y:260,w:80,h:16},
+      {x:1480,y:220,w:80,h:16},
+      {x:1640,y:180,w:80,h:16},
+      {x:1800,y:140,w:80,h:16},
+      {x:1960,y:GROUND_Y,w:290,h:40} ],
+    [ {x:230,y:270},{x:390,y:230},{x:550,y:190},{x:710,y:150},{x:870,y:110},{x:1030,y:150},{x:1190,y:190},{x:1350,y:230},{x:1510,y:190},{x:1670,y:150},{x:1830,y:110},{x:40,y:330} ],
+    [ {x:870,y:70},{x:2060,y:60} ],
+    [],
+    {x:2130,y:296,w:36,h:64},
+    {x:20,y:296}
+  ),
+  lvl(2400,
+    [ {x:0,y:GROUND_Y,w:140,h:40},
+      {x:260,y:GROUND_Y,w:100,h:40},
+      {x:460,y:GROUND_Y,w:100,h:40},
+      {x:150,y:230,w:70,h:16},
+      {x:350,y:190,w:70,h:16},
+      {x:660,y:GROUND_Y,w:100,h:40},
+      {x:550,y:150,w:70,h:16},
+      {x:860,y:GROUND_Y,w:100,h:40},
+      {x:750,y:120,w:70,h:16},
+      {x:1060,y:GROUND_Y,w:100,h:40},
+      {x:950,y:160,w:70,h:16},
+      {x:1150,y:100,w:200,h:16},
+      {x:1450,y:150,w:90,h:16},
+      {x:1640,y:200,w:90,h:16},
+      {x:1830,y:150,w:90,h:16},
+      {x:2020,y:100,w:90,h:16},
+      {x:2210,y:GROUND_Y,w:190,h:40} ],
+    [ {x:180,y:200},{x:380,y:160},{x:580,y:120},{x:780,y:90},{x:980,y:130},{x:1250,y:70},{x:1480,y:120},{x:1670,y:170},{x:1860,y:120},{x:2050,y:70},{x:50,y:330} ],
+    [ {x:1250,y:40},{x:2260,y:60} ],
+    [ {x:290,y:344,w:50,h:16},{x:490,y:344,w:50,h:16},{x:690,y:344,w:50,h:16},{x:890,y:344,w:50,h:16},{x:1090,y:344,w:50,h:16} ],
+    {x:2300,y:296,w:36,h:64},
+    {x:30,y:296}
+  ),
+  lvl(2600,
+    [ {x:0,y:GROUND_Y,w:130,h:40},
+      {x:220,y:310,w:70,h:16},
+      {x:380,y:270,w:70,h:16},
+      {x:540,y:230,w:70,h:16},
+      {x:700,y:190,w:70,h:16},
+      {x:860,y:150,w:70,h:16},
+      {x:1020,y:110,w:70,h:16},
+      {x:1180,y:150,w:70,h:16},
+      {x:1340,y:190,w:70,h:16},
+      {x:1500,y:230,w:70,h:16},
+      {x:1660,y:270,w:70,h:16},
+      {x:1820,y:230,w:70,h:16},
+      {x:1980,y:190,w:70,h:16},
+      {x:2140,y:150,w:70,h:16},
+      {x:2300,y:GROUND_Y,w:300,h:40} ],
+    [ {x:250,y:280},{x:410,y:240},{x:570,y:200},{x:730,y:160},{x:890,y:120},{x:1050,y:80},{x:1210,y:120},{x:1370,y:160},{x:1530,y:200},{x:1690,y:240},{x:1850,y:200},{x:2010,y:160},{x:2170,y:120},{x:40,y:330} ],
+    [ {x:1050,y:50},{x:2400,y:60} ],
+    [],
+    {x:2480,y:296,w:36,h:64},
+    {x:20,y:296}
+  )
+];
+
+// ---------- Persistent save (uses artifact storage, personal to this user) ----------
+async function saveProgress(state){
+  try{
+    await window.storage.set('deva_save', JSON.stringify(state), false);
+  }catch(e){ /* storage unavailable, fail silently */ }
+}
+async function loadProgress(){
+  try{
+    const r = await window.storage.get('deva_save', false);
+    return r ? JSON.parse(r.value) : null;
+  }catch(e){ return null; }
+}
+
+// ---------- Game state ----------
+let game = {
+  levelIndex: 0,
+  score: 0,
+  lives: 3,
+  running: false,
+  keys: {},
+  camX: 0,
+};
+
+const GRAVITY = 0.62;
+const JUMP_FORCE = -12.6;
+const MOVE_SPEED = 4.3;
+const FRICTION = 0.82;
+
+let player, level, coinsLeft, bonusLeft, spikesState, particles;
+
+function initLevel(idx){
+  level = LEVELS[idx];
+  player = {
+    x: level.start.x, y: level.start.y, w:26, h:38,
+    vx:0, vy:0, grounded:false, facing:1, alive:true, invuln:0,
+    walkCycle:0, wasGrounded:true, trailTimer:0
+  };
+  coinsLeft = level.coins.map(c=>({...c, taken:false}));
+  bonusLeft = level.bonus.map(c=>({...c, taken:false}));
+  particles = [];
+  game.camX = 0;
+}
+
+function spawnParticle(x,y,vx,vy,life,color,size){
+  particles.push({x,y,vx,vy,life,maxLife:life,color,size:size||3});
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+function drawParticles(){
+  for(const p of particles){
+    const sx = p.x - game.camX;
+    const alpha = Math.max(0, p.life/p.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(sx-p.size/2, p.y-p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function rectsOverlap(a,b){
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+
+function resolveCollisions(){
+  player.grounded = false;
+  // horizontal
+  player.x += player.vx;
+  for(const p of level.platforms){
+    if(rectsOverlap(player,p)){
+      if(player.vx > 0) player.x = p.x - player.w;
+      else if(player.vx < 0) player.x = p.x + p.w;
+      player.vx = 0;
+    }
+  }
+  player.x = Math.max(0, Math.min(player.x, level.width - player.w));
+  // vertical
+  player.y += player.vy;
+  for(const p of level.platforms){
+    if(rectsOverlap(player,p)){
+      if(player.vy > 0){ player.y = p.y - player.h; player.vy = 0; player.grounded = true; }
+      else if(player.vy < 0){ player.y = p.y + p.h; player.vy = 0; }
+    }
+  }
+}
+
+function update(){
+  if(!game.running) return;
+  const k = game.keys;
+  const left = k['ArrowLeft']||k['KeyA'];
+  const right = k['ArrowRight']||k['KeyD'];
+  const jumpPressed = k['ArrowUp']||k['KeyW']||k['Space'];
+
+  // FULL AIR CONTROL — direction can change at any time, grounded or not
+  if(left && !right){ player.vx -= 0.9; player.facing=-1; }
+  else if(right && !left){ player.vx += 0.9; player.facing=1; }
+  else { player.vx *= FRICTION; }
+  player.vx = Math.max(-MOVE_SPEED, Math.min(MOVE_SPEED, player.vx));
+
+  if(jumpPressed && player.grounded){
+    player.vy = JUMP_FORCE;
+    player.grounded = false;
+    sfx.jump();
+    for(let i=0;i<6;i++) spawnParticle(player.x+player.w/2, player.y+player.h, (Math.random()-0.5)*3, -Math.random()*1.5, 20, selectedChar.accent, 3);
+  }
+
+  const wasGrounded = player.grounded;
+  player.vy += GRAVITY;
+  if(player.vy > 16) player.vy = 16;
+
+  resolveCollisions();
+
+  // landing dust burst
+  if(player.grounded && !player.wasGrounded){
+    for(let i=0;i<8;i++) spawnParticle(player.x+player.w/2, player.y+player.h, (Math.random()-0.5)*3, -Math.random()*2, 18, '#d8cba8', 3);
+  }
+  player.wasGrounded = player.grounded;
+
+  // walk-cycle animation timer
+  if(player.grounded && Math.abs(player.vx) > 0.4) player.walkCycle += Math.abs(player.vx)*0.25;
+
+  // running dust every few frames while grounded & moving
+  if(player.grounded && Math.abs(player.vx) > 1.5 && Math.floor(player.walkCycle)%3===0){
+    spawnParticle(player.x+player.w/2 - player.facing*10, player.y+player.h-4, -player.vx*0.2, -0.4, 14, '#d8cba8', 2);
+  }
+  // elemental trail while airborne
+  player.trailTimer++;
+  if(!player.grounded && player.trailTimer%4===0){
+    spawnParticle(player.x+player.w/2, player.y+player.h/2, (Math.random()-0.5)*0.6, 0.6, 22, selectedChar.accent, 3);
+  }
+
+  updateParticles();
+
+  if(player.invuln>0) player.invuln--;
+
+  // fell off world
+  if(player.y > H+100){ hurtPlayer(); }
+
+  // spikes
+  for(const s of level.spikes){
+    if(rectsOverlap(player, s) && player.invuln<=0){ hurtPlayer(); }
+  }
+
+  // coins
+  for(const c of coinsLeft){
+    if(!c.taken && rectsOverlap(player,{x:c.x-10,y:c.y-10,w:20,h:20})){
+      c.taken = true; game.score += 10; sfx.coin();
+    }
+  }
+  // bonus stars
+  for(const b of bonusLeft){
+    if(!b.taken && rectsOverlap(player,{x:b.x-12,y:b.y-12,w:24,h:24})){
+      b.taken = true; game.score += 50; sfx.bonus();
+    }
+  }
+  // goal
+  if(rectsOverlap(player, level.goal)){
+    onLevelClear();
+  }
+
+  // camera follows player, allows going back freely
+  const targetCam = player.x - W/2 + player.w/2;
+  game.camX = Math.max(0, Math.min(targetCam, level.width - W));
+
+  updateHud();
+}
+
+function hurtPlayer(){
+  if(player.invuln>0 || !player.alive) return;
+  sfx.hurt();
+  game.lives--;
+  updateHud();
+  if(game.lives <= 0){
+    game.running = false;
+    document.getElementById('goSummary').textContent =
+      `Score: ${game.score} — you reached Level ${game.levelIndex+1}`;
+    show('gameOverScreen');
+    return;
+  }
+  // respawn at START of CURRENT level only — never back to level 1
+  player.x = level.start.x; player.y = level.start.y;
+  player.vx = 0; player.vy = 0; player.invuln = 60;
+}
+
+async function onLevelClear(){
+  if(!game.running) return;
+  game.running = false;
+  sfx.levelClear();
+  game.score += 100;
+  const isLast = game.levelIndex === LEVELS.length-1;
+  await saveProgress({
+    levelIndex: isLast ? 0 : game.levelIndex+1,
+    score: game.score,
+    lives: game.lives,
+    character: selectedChar.id,
+    cleared: game.levelIndex+1
+  });
+  if(isLast){
+    document.getElementById('winSummary').textContent = `Final score: ${game.score}`;
+    show('winScreen');
+  } else {
+    document.getElementById('lcSummary').textContent = `Score: ${game.score} — Lives: ${game.lives}`;
+    show('levelCompleteScreen');
+  }
+}
+
+// ---------- Rendering ----------
+function drawBackdrop(){
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#1d2b4f'); g.addColorStop(1,'#0d1321');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  // parallax stars/blocks
+  ctx.fillStyle = 'rgba(242,193,78,0.15)';
+  for(let i=0;i<18;i++){
+    const wx = (i*137 - game.camX*0.3) % (W+80);
+    const xx = ((wx % (W+80))+(W+80))%(W+80) - 40;
+    ctx.fillRect(xx, 40+(i%5)*22, 3,3);
+  }
+}
+
+function drawPlatform(p){
+  const sx = p.x - game.camX;
+  if(sx+p.w<0 || sx>W) return;
+  ctx.fillStyle = '#5c2e22';
+  ctx.fillRect(sx, p.y, p.w, p.h);
+  ctx.fillStyle = '#8a4b3b';
+  ctx.fillRect(sx, p.y, p.w, 6);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  for(let bx=0; bx<p.w; bx+=20){ ctx.strokeRect(sx+bx, p.y, 20, p.h); }
+}
+
+function drawCoin(c){
+  const sx = c.x - game.camX;
+  if(sx<-20||sx>W+20) return;
+  ctx.save();
+  ctx.translate(sx, c.y);
+  const t = Date.now()/200;
+  const sq = Math.abs(Math.cos(t));
+  ctx.fillStyle = '#f2c14e';
+  ctx.beginPath();
+  ctx.ellipse(0,0, 8*sq+2, 9, 0,0,Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#b8862f'; ctx.lineWidth=2; ctx.stroke();
+  ctx.restore();
+}
+
+function drawStar(b){
+  const sx = b.x - game.camX;
+  if(sx<-24||sx>W+24) return;
+  ctx.save();
+  ctx.translate(sx,b.y);
+  ctx.rotate(Date.now()/500);
+  ctx.fillStyle = '#5fd0a5';
+  ctx.beginPath();
+  for(let i=0;i<5;i++){
+    const a = -Math.PI/2 + i*(Math.PI*2/5);
+    const a2 = a + Math.PI/5;
+    ctx.lineTo(Math.cos(a)*11, Math.sin(a)*11);
+    ctx.lineTo(Math.cos(a2)*5, Math.sin(a2)*5);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawSpike(s){
+  const sx = s.x - game.camX;
+  if(sx+s.w<0||sx>W) return;
+  ctx.fillStyle = '#e5533d';
+  const n = Math.max(1, Math.floor(s.w/14));
+  for(let i=0;i<n;i++){
+    const bx = sx + i*(s.w/n);
+    ctx.beginPath();
+    ctx.moveTo(bx, s.y+s.h);
+    ctx.lineTo(bx+s.w/n/2, s.y);
+    ctx.lineTo(bx+s.w/n, s.y+s.h);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+function drawGoal(){
+  const sx = level.goal.x - game.camX;
+  ctx.fillStyle = '#c9c9c9';
+  ctx.fillRect(sx+16, level.goal.y, 4, level.goal.h);
+  ctx.fillStyle = '#5fd0a5';
+  const wave = Math.sin(Date.now()/200)*4;
+  ctx.beginPath();
+  ctx.moveTo(sx+20, level.goal.y+4);
+  ctx.lineTo(sx+20+26+wave, level.goal.y+12);
+  ctx.lineTo(sx+20, level.goal.y+22);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawAccessory(ch, hw, hh){
+  // drawn in head-local space, head spans roughly x:[-hw,hw] y:[-hh,0]
+  const t = Date.now()/300;
+  if(ch.accessory === 'flame'){
+    ctx.fillStyle = ch.accent;
+    const flick = Math.sin(t*4)*2;
+    ctx.beginPath();
+    ctx.moveTo(-hw*0.5, -hh);
+    ctx.lineTo(0, -hh-14-flick);
+    ctx.lineTo(hw*0.15, -hh-4);
+    ctx.lineTo(hw*0.55, -hh-12+flick);
+    ctx.lineTo(hw*0.35, -hh);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = ch.body;
+    ctx.beginPath();
+    ctx.moveTo(-hw*0.2,-hh); ctx.lineTo(hw*0.05,-hh-7-flick*0.5); ctx.lineTo(hw*0.25,-hh);
+    ctx.closePath(); ctx.fill();
+  } else if(ch.accessory === 'leaf'){
+    ctx.fillStyle = ch.accent;
+    const sway = Math.sin(t*2)*3;
+    // two pointed ear-leaves
+    ctx.beginPath();
+    ctx.moveTo(-hw*0.9,-hh*0.6);
+    ctx.quadraticCurveTo(-hw*1.6,-hh-6+sway, -hw*0.5,-hh-2);
+    ctx.quadraticCurveTo(-hw*0.6,-hh*0.7,-hw*0.9,-hh*0.6);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(hw*0.9,-hh*0.6);
+    ctx.quadraticCurveTo(hw*1.6,-hh-6-sway, hw*0.5,-hh-2);
+    ctx.quadraticCurveTo(hw*0.6,-hh*0.7,hw*0.9,-hh*0.6);
+    ctx.fill();
+  } else if(ch.accessory === 'crown'){
+    ctx.fillStyle = ch.accent;
+    ctx.beginPath();
+    ctx.moveTo(-hw*0.7,-hh);
+    ctx.lineTo(-hw*0.7,-hh-9);
+    ctx.lineTo(-hw*0.35,-hh-3);
+    ctx.lineTo(0,-hh-12);
+    ctx.lineTo(hw*0.35,-hh-3);
+    ctx.lineTo(hw*0.7,-hh-9);
+    ctx.lineTo(hw*0.7,-hh);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = ch.body;
+    ctx.fillRect(-2,-hh-11,4,4);
+  }
+}
+
+function drawPlayer(){
+  const sx = player.x - game.camX;
+  if(player.invuln>0 && Math.floor(Date.now()/80)%2===0) return; // blink on hurt
+  const ch = selectedChar;
+  const cx = sx+player.w/2, cy = player.y+player.h/2;
+  const airborne = !player.grounded;
+  const cycle = player.walkCycle;
+  const legSwing = (player.grounded && Math.abs(player.vx)>0.4) ? Math.sin(cycle)*7 : 0;
+  const armSwing = (player.grounded && Math.abs(player.vx)>0.4) ? Math.sin(cycle+Math.PI)*6 : (airborne ? -8*Math.sign(player.vy||1) : 0);
+  const bob = (player.grounded && Math.abs(player.vx)>0.4) ? Math.abs(Math.sin(cycle))*2 : 0;
+  const squash = airborne ? (player.vy<0 ? 1.08 : 0.94) : 1;
+
+  ctx.save();
+  ctx.translate(cx, cy - bob);
+  if(player.facing<0) ctx.scale(-1,1);
+  ctx.scale(1/squash, squash);
+
+  const w = player.w, h = player.h;
+  const legW=6, legH=12, armW=5, armH=13;
+
+  // back arm
+  ctx.fillStyle = ch.trim;
+  ctx.fillRect(-w*0.32-armW/2, -h*0.06+armSwing*0.4, armW, armH);
+  // legs
+  ctx.fillStyle = ch.trim;
+  ctx.fillRect(-w*0.22-legW/2, h*0.32-legSwing*0.5, legW, legH-legSwing*0.3);
+  ctx.fillRect(w*0.22-legW/2, h*0.32+legSwing*0.5, legW, legH+legSwing*0.3);
+
+  // torso (two-tone shading)
+  const torsoY = -h*0.34, torsoH = h*0.6;
+  ctx.fillStyle = ch.body;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.46, torsoY+6);
+  ctx.quadraticCurveTo(-w*0.5, torsoY, -w*0.3, torsoY);
+  ctx.lineTo(w*0.3, torsoY);
+  ctx.quadraticCurveTo(w*0.5, torsoY, w*0.46, torsoY+6);
+  ctx.lineTo(w*0.46, torsoY+torsoH);
+  ctx.lineTo(-w*0.46, torsoY+torsoH);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(-w*0.42, torsoY+4, w*0.28, torsoH-8);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(w*0.14, torsoY+4, w*0.32, torsoH-8);
+
+  // belt trim
+  ctx.fillStyle = ch.trim;
+  ctx.fillRect(-w*0.46, torsoY+torsoH-5, w*0.92, 5);
+
+  // front arm
+  ctx.fillStyle = ch.body;
+  ctx.fillRect(w*0.32-armW/2, -h*0.06-armSwing*0.4, armW, armH);
+  ctx.fillStyle = ch.trim;
+  ctx.fillRect(w*0.32-armW/2, h*0.06-armSwing*0.4, armW, 4);
+
+  // head
+  const headW = w*0.72, headH = h*0.4, headY = -h*0.5;
+  ctx.fillStyle = ch.body;
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(-headW/2, headY, headW, headH, 6) : ctx.rect(-headW/2, headY, headW, headH);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(-headW/2+2, headY+2, headW*0.35, headH-4);
+
+  // accessory (drawn relative to top of head)
+  drawAccessory(ch, headW/2, -headY);
+
+  // single glowing "deva eye"
+  const blink = (Math.floor(Date.now()/2200)%9===0);
+  ctx.fillStyle = '#1a1420';
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(headW*0.05, headY+headH*0.35, headW*0.38, blink?3:headH*0.4, 3) : ctx.rect(headW*0.05, headY+headH*0.35, headW*0.38, headH*0.4);
+  ctx.fill();
+  if(!blink){
+    ctx.fillStyle = ch.accent;
+    ctx.beginPath();
+    ctx.arc(headW*0.05+headW*0.38*0.55, headY+headH*0.35+headH*0.2, 2.6, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function draw(){
+  drawBackdrop();
+  for(const p of level.platforms) drawPlatform(p);
+  for(const s of level.spikes) drawSpike(s);
+  drawGoal();
+  for(const c of coinsLeft) if(!c.taken) drawCoin(c);
+  for(const b of bonusLeft) if(!b.taken) drawStar(b);
+  drawParticles();
+  drawPlayer();
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ---------- HUD / screens ----------
+function updateHud(){
+  document.getElementById('hudLevel').textContent = game.levelIndex+1;
+  document.getElementById('hudTotal').textContent = LEVELS.length;
+  document.getElementById('hudScore').textContent = game.score;
+  document.getElementById('hudLives').textContent = game.lives;
+}
+const screens = ['startScreen','tutorialScreen','levelCompleteScreen','gameOverScreen','winScreen'];
+function show(id){
+  screens.forEach(s=>document.getElementById(s).classList.add('hidden'));
+  if(id) document.getElementById(id).classList.remove('hidden');
+}
+
+function startLevel(idx){
+  game.levelIndex = idx;
+  initLevel(idx);
+  game.running = true;
+  show(null);
+  updateHud();
+}
+
+function startNewGame(){
+  game.score = 0; game.lives = 3;
+  startLevel(0);
+}
+
+// ---------- Character select UI ----------
+const ACCESSORY_GLYPH = { flame:'▲', leaf:'❧', crown:'♛' };
+function buildCharRow(){
+  const row = document.getElementById('charRow');
+  row.innerHTML = '';
+  CHARACTERS.forEach(c=>{
+    const card = document.createElement('div');
+    card.className = 'charCard' + (c.id===selectedChar.id?' selected':'');
+    card.innerHTML = `
+      <div class="swatch" style="background:radial-gradient(circle at 50% 30%, ${c.accent}, ${c.body} 65%); border:2px solid ${c.trim}; display:flex; align-items:flex-start; justify-content:center; color:${c.trim}; font-size:14px; padding-top:2px;">${ACCESSORY_GLYPH[c.accessory]||''}</div>
+      <div style="font-weight:bold;">${c.name}</div>
+      <div style="font-size:11px; opacity:0.75; color:${c.accent};">${c.tagline}</div>`;
+    card.onclick = ()=>{ selectedChar = c; buildCharRow(); ensureAudio(); sfx.coin(); };
+    row.appendChild(card);
+  });
+}
+
+// ---------- Input ----------
+window.addEventListener('keydown', e=>{
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  game.keys[e.code] = true;
+});
+window.addEventListener('keyup', e=>{ game.keys[e.code] = false; });
+
+// ---------- Buttons ----------
+document.getElementById('btnNewGame').onclick = ()=>{ ensureAudio(); startNewGame(); };
+document.getElementById('btnTutorial').onclick = ()=>{ ensureAudio(); show('tutorialScreen'); };
+document.getElementById('btnCloseTutorial').onclick = ()=> show('startScreen');
+document.getElementById('btnNextLevel').onclick = ()=>{
+  const next = (game.levelIndex+1) % LEVELS.length;
+  startLevel(next);
+};
+document.getElementById('btnRetryLevel').onclick = ()=>{
+  game.lives = 3;
+  startLevel(game.levelIndex);
+};
+document.getElementById('btnBackToMenu').onclick = ()=> show('startScreen');
+document.getElementById('btnPlayAgain').onclick = ()=> startNewGame();
+
+document.getElementById('btnContinue').onclick = async ()=>{
+  ensureAudio();
+  const saved = await loadProgress();
+  if(saved){
+    const ch = CHARACTERS.find(c=>c.id===saved.character) || CHARACTERS[0];
+    selectedChar = ch;
+    game.score = saved.score||0;
+    game.lives = saved.lives && saved.lives>0 ? saved.lives : 3;
+    startLevel(saved.levelIndex||0);
+  } else {
+    startNewGame();
+  }
+};
+
+// ---------- Init ----------
+(async function init(){
+  buildCharRow();
+  const saved = await loadProgress();
+  const note = document.getElementById('saveNote');
+  const contBtn = document.getElementById('btnContinue');
+  if(saved){
+    note.textContent = `Saved progress found — Level ${saved.cleared+1<=LEVELS.length? (saved.levelIndex+1):1}, Score ${saved.score}.`;
+    contBtn.disabled = false;
+  } else {
+    note.textContent = 'No saved progress yet.';
+    contBtn.disabled = true;
+    contBtn.style.opacity = 0.5;
+  }
+  initLevel(0);
+  draw();
+  requestAnimationFrame(loop);
+})();
+
+})();
+</script>
+</body>
+</html>

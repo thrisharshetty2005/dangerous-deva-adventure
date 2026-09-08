@@ -18,7 +18,7 @@ A thrilling adventure game where you play as Dangerous Deva, explore mysterious 
 
 # Core gameplay fixes 
 
-- #Sound- Web Audio sound effects for jump, coin pickup, bonus pickup, hurt and level clear fanfare
+- Sound- Web Audio sound effects for jump, coin pickup, bonus pickup, hurt and level clear fanfare
 
 - Restart from level 1 on death- Now you respawn at the start of the current level only and progress is kept
 
